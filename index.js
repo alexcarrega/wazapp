@@ -1,19 +1,27 @@
 "use strict";
 
 const fs = require('fs')
+const electron = require('electron');
+const settings = require('electron-settings');
+const ipc_main = electron.ipcMain;
 const { app, BrowserWindow, Menu, Tray } = require('electron')
 const path = require('path')
-const gotTheLock = app.requestSingleInstanceLock()
+const got_the_lock = app.requestSingleInstanceLock();
 
-var wscc = null, tray = null
+var wscc = null, tray = null, data = {
+	loaded: false
+};
 
+app.launcher.setBadgeCount = (count) => {
+	data.msg_count = count; 
+}
+app.launcher.getBadgeCount = () => data.msg_count;
 
-if (!gotTheLock) {
+if (!got_the_lock) {
 	return app.quit()
 }
 
-
-///second instance behaviour
+// Second instance behaviour
 app.on('second-instance', (commandLine, workingDirectory) => {
 	// Someone tried to run a second instance, we should focus our window.
 	if (wscc.window) {
@@ -24,22 +32,55 @@ app.on('second-instance', (commandLine, workingDirectory) => {
 	}
 })
 
-//panel icon
+// Panel icon
 app.on('ready', () => {
-	tray = new Tray(path.join(__dirname, 'assets/icons/icon.png'))
+	['show_notifications', 'close_to_tray', 'start_in_tray'].forEach((set_prop) => {
+		if (!settings.has(set_prop)) {
+			settings.set(set_prop, true);
+		}
+	});
+
+	ipc_main.on('notification-shim', (e, msg) => {
+		console.log(msg);
+	});
+
+	tray = new Tray(path.join(__dirname, 'assets/icons/icon-load.png'))
 	const contextMenu = Menu.buildFromTemplate([{
-			label: 'Hide',
-			click: () => { wscc.hide(); }
+			label: 'Toggle window show/hide',
+			click: () => {
+				if (wscc.isVisible()) {
+					wscc.hide();
+				} else {
+					wscc.show();
+				}
+			}
 		}, {
-			type: 'separator'
+			label: 'Show notifications',
+			type: 'checkbox',
+			checked: settings.get('show_notifications'),
+			click: (menu_item) => {
+				settings.set('show_notifications', menu_item.checked);
+			}
 		}, {
-			label: 'Show',
-			click: () => { wscc.show(); }
+			label: 'Close to tray',
+			type: 'checkbox',
+			checked: settings.get('close_to_tray'),
+			click: (menu_item) => {
+				settings.set('close_to_tray', menu_item.checked);
+			}
 		}, {
-			type: 'separator'
-		}, {
+			label: 'Start in tray',
+			type: 'checkbox',
+			checked: settings.get('start_in_tray'),
+			click: (menu_item) => {
+				settings.set('start_in_tray', menu_item.checked);
+			}
+		},{
 			label: 'Quit',
-			click: () => { app.quit(); }
+			click: () => {
+				app.isQuiting = true;
+				app.quit();
+			}
 		}
 	])
 	tray.setToolTip('WazApp.')
@@ -71,9 +112,7 @@ app.on('activate', function () {
 	}
 })
 
-
-
-//*Utility functions*/
+// Utility functions
 
 global.osLinux = function (callback) {
 	if (process.platform === 'linux') {
@@ -82,40 +121,61 @@ global.osLinux = function (callback) {
 	return function () { };
 }
 
-
-
 function createWindow() {
+	var mainScreen = electron.screen.getPrimaryDisplay();
+	var dims = mainScreen.workAreaSize;
+
 	// Create the browser window.
 	wscc = new BrowserWindow({
-		minWidth: 500,
-		minHeight: 600,
-		width: 500,
-		height: 600,
 		backgroundColor: '#2c2c2c',
-		title: "WhatSapp",
+		title: "WhatsApp",
+		width: dims.width * .8,
+		height: dims.height * .8,
 		autoHideMenuBar: true,
-		icon: path.join(__dirname, 'assets/icons/icon.png'),
-		show: true
+		webPreferences: {
+			preload: path.join(__dirname, 'browser.js')
+		},
+		icon: path.join(__dirname, 'assets/icons/icon-load.png'),
+		show: !settings.get('start_in_tray')
 	})
 
-	wscc.maximize()
+	// wscc.setResizable(false);
 	wscc.setMenuBarVisibility(false);
 
-	//set user agent of browser #avoid whatsapp error on chromium browser
+	// Set user agent of browser #avoid whatsapp error on chromium browser
 	wscc.webContents.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.86 Safari/537.36")
 	wscc.loadURL("https://web.whatsapp.com");
 
-
-	//notifications
+	// Notifications
 	wscc.on('page-title-updated', osLinux((event, title) => {
-		var msgCount = title.match(/\((\d+)\)/);
-		msgCount = msgCount ? msgCount[1] : '';
-		if (parseInt(msgCount) > 0) {
-			tray.setImage(path.join(__dirname, 'assets/icons/iconmsg.png'));
+		var msg_count = title.match(/\((\d+)\)/);
+		msg_count = msg_count ? msg_count[1] : '';
+		data.msg_count = parseInt(msg_count);
+		if (data.msg_count > 0) {
+			tray.setImage(path.join(__dirname, 'assets/icons/icon-msg.png'));
+			wscc.setIcon(path.join(__dirname, 'assets/icons/icon-msg.png'));
 		} else {
-			tray.setImage(path.join(__dirname, 'assets/icons/icon.png'));
+			if (data.content_loaded) {
+				tray.setImage(path.join(__dirname, 'assets/icons/icon.png'));
+				wscc.setIcon(path.join(__dirname, 'assets/icons/icon.png'));
+			} else {
+				tray.setImage(path.join(__dirname, 'assets/icons/icon-load.png'));
+				wscc.setIcon(path.join(__dirname, 'assets/icons/icon-load.png'));
+			}
 		}
 	}))
+
+	wscc.on('close', function (event) {
+	    if(!app.isQuiting && settings.get('close_to_tray')){
+			event.preventDefault();
+			wscc.hide();
+		}
+		return !settings.get('close_to_tray');
+	})
+
+	wscc.on('closed', function (event) {
+		wscc = null;
+	})
 
 	wscc.webContents.on('dom-ready', function (e) {
 		let js_content = fs.readFileSync(path.join(__dirname, 'assets/init.js'), 'utf8')
@@ -125,13 +185,11 @@ function createWindow() {
 	})
 
 	// Open the DevTools.
-	// window.webContents.openDevTools()
+	// wscc.webContents.openDevTools()
 
-	// Emitted when the window is closed.
-	wscc.on('closed', function () {
-		// Dereference the window object, usually you would store windows
-		// in an array if your app supports multi windows, this is the time
-		// when you should delete the corresponding element.
-		wscc = null
+	wscc.webContents.on('did-finish-load', function () {
+		data.content_loaded = true;
+		tray.setImage(path.join(__dirname, 'assets/icons/icon.png'));
+		wscc.setIcon(path.join(__dirname, 'assets/icons/icon.png'));
 	})
 }
