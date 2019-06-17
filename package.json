@@ -1,27 +1,27 @@
 {
-	"name": "ws-custom-client",
+	"name": "whatapp-custom-client",
 	"version": "3.0.0",
-	"description": "Whatsapp Custom Client for Linux",
+	"description": "Whatsapp Custom Client",
 	"main": "index.js",
 	"scripts": {
 		"start": "electron .",
-		"build-linux64": "electron-packager . wscc --overwrite --asar --platform=linux --arch=x64 --icon=assets/icons/icon.png --prune=true --out=release",
-		"build-linux32": "electron-packager . wscc --overwrite --asar --platform=linux --arch=ia32 --icon=assets/icons/icon.png --prune=true --out=release",
-		"package-linux": "electron-packager . wscc --overwrite --asar=true --platform=linux --arch=x64 --icon=assets/icons/png/1024x1024.png --prune=true --out=release"
+		"build-linux64": "electron-packager . wazapp --overwrite --asar --platform=linux --arch=x64 --icon=assets/icons/icon.png --prune=true --out=release",
+		"build-linux32": "electron-packager . wazapp --overwrite --asar --platform=linux --arch=ia32 --icon=assets/icons/icon.png --prune=true --out=release",
+		"package-linux": "electron-packager . wazapp --overwrite --asar=true --platform=linux --arch=x64 --icon=assets/icons/png/1024x1024.png --prune=true --out=release"
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/miccar/wazapp/"
+		"url": "https://github.com/alexcarrega/wazapp/"
 	},
 	"keywords": [
-		"Electron",
-		"WhatsApp",
+		"electron",
+		"whatsapp",
 		"linux",
 		"debian",
 		"ubuntu",
 		"fedora",
-		"WhatsApp works with Google Chrome 36+",
-		"WhatsApp custom client"
+		"whatsapp works with google chrome 36+",
+		"whatsapp custom client"
 	],
 	"license": "CC0-1.0",
 	"devDependencies": {
@@ -29,7 +29,9 @@
 	},
 	"dependencies": {
 		"electron-notification-shim": "^1.1.0",
+		"electron-open-link-in-browser": "^1.0.2",
 		"electron-packager": "^13.1.1",
-		"electron-settings": "^3.2.0"
+		"electron-settings": "^3.2.0",
+		"electron-windows-badge": "^1.0.5"
 	}
 }
